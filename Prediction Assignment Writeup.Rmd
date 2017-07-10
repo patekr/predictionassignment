@@ -1,0 +1,98 @@
+---
+title: "Prediction Assignment Writeup"
+author: "Kim Pate"
+date: "July 9, 2017"
+output:
+  html_document: default
+  pdf_document: default
+keep_md: yes
+---
+
+##Objective
+Predict the manner in which participants did an exercise. This report describes how the model was built, cross-validated, and estimates the expected out of sample error. how you used cross validation, what you think the expected out of sample error is.
+
+##Data Processing
+```{r echo=TRUE}
+library(caret)
+install.packages("rattle", repos = "http://cran.us.r-project.org")
+library(rpart)
+library(rpart.plot)
+library(randomForest)
+library(repmis)
+#loading in relevant packages
+
+TrainingURL <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+TestURL  <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+#set URL for datasets
+
+training <- read.csv(url(TrainingURL), na.strings = c("NA", ""))
+test <- read.csv(url(TestURL), na.strings = c("NA", ""))
+#download the datasets
+
+head(training)
+head(test)
+#We start with 160 variables 
+
+training <- training[, colSums(is.na(training)) == 0]
+test <- test[, colSums(is.na(test)) == 0]
+#remove predictors with missing values
+
+trainData <- training[, -c(1:7)]
+testData <- test[, -c(1:7)]
+#remove first seven columns since these are not relevant for prediction
+
+dim(trainData)
+dim(testData)
+#the clean training and test datasets have 53 variables 
+
+set.seed(1234) 
+inTrain <- createDataPartition(trainData$classe, p = 0.7, list = FALSE)
+train <- trainData[inTrain, ]
+validation <- trainData[-inTrain, ]
+#create a partition with the training dataset 70% training and 30% validation
+```
+
+##Prediction 
+Now, we will apply the Random Forest and Generalized Boosted Model to predict the outcome (classe) and see which one is most accurate. We choose these two algorithims since they are typically high-performing. 
+
+#Random Forest
+```{r echo=TRUE}
+set.seed(1234)
+control_rf <- trainControl(method = "cv", number = 5)
+modfit_rf <- train(classe ~ ., data = train, method = "rf", trControl = control_rf)
+print(modfit_rf, digits = 4)
+#set seed and run model fit of random forest method, all variables predicting the outcome of classe
+
+predict_rf <- predict(modfit_rf, validation)
+# predict outcomes using validation set
+(conf_rf <- confusionMatrix(validation$classe, predict_rf))
+#print prediction
+
+(accuracy_rf <- conf_rf$overall[1])
+#print accuracy of method
+```
+For the random forest method, the accuracy is .993 meaning the out of sample error rate is .006. 
+
+##Generalized Boosted Model
+```{r echo=TRUE}
+set.seed(1234)
+control_gbm <- trainControl(method = "repeatedcv", number = 5, repeats = 1)
+modfit_gbm <- train(classe ~ ., data = train, method = "gbm", trControl = control_gbm, verbose = FALSE)
+print(modfit_gbm, digits = 4)
+#set seed and run model fit of boosting method, all variables predicting the outcome of classe
+
+predict_gbm <- predict(modfit_gbm, validation)
+# predict outcomes using validation set
+(conf_gbm <- confusionMatrix(validation$classe, predict_gbm))
+#print prediction
+(accuracy_gbm <- conf_gbm$overall[1])
+#print accuracy of method
+```
+For the generalized boosted method, the accuracy is .965 meaning the out of sample error rate is .035.
+
+#Prediction on Test Set
+We use the Random Forest method to predict classe for the test dataset since this has the best accuracy. 
+
+```{r echo=TRUE}
+(predict(modfit_rf, testData))
+```
